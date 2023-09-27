@@ -1,0 +1,9 @@
+titon_1_02.npy
+titon_1_02_vocal_only.npy
+titon_1_02_instrumental_only.npy
+amy_2_02.npy
+amy_2_02_vocal_only.npy
+amy_2_02_instrumental_only.npy
+TheScarletBrand_LesFleursDuMal_MIX.npy
+TheSoSoGlos_Emergency_MIX.npy
+Wolf_DieBekherte_MIX.npy
