@@ -69,11 +69,11 @@ def Freq2LogFreqMapping(tfr, f, fr, fc, tc, NumPerOct):
 	freq_band_transformation = np.zeros((Nest - 1, len(f)), dtype=np.float32)
 	import bisect
 	for i in range(1, Nest - 1):
-		# l = int(round(central_freq[i - 1] / fr))
-		# r = int(round(central_freq[i + 1] / fr) + 1)
+		l = int(round(central_freq[i - 1] / fr))
+		r = int(round(central_freq[i + 1] / fr) + 1)
 		# interval (l,r) (i.e. not including l, r)
-		l = bisect.bisect_right(X, central_freq[i-1])
-		r = bisect.bisect_left(X, central_freq[i+1])
+		# l = bisect.bisect_right(X, central_freq[i-1])
+		# r = bisect.bisect_left(X, central_freq[i+1])
 		# rounding1
 		if l >= r - 1:
 			freq_band_transformation[i, l] = 1
