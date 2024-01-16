@@ -11,6 +11,9 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torchvision import transforms
+from torchvision.datasets import MNIST
+from torch.utils.data import DataLoader, random_split
 import pytorch_lightning as pl
 
 from util import melody_eval, freq2octave, freq2tone, tofreq
@@ -295,8 +298,7 @@ class TONet(pl.LightningModule):
 				
 			output = self(cfps)
 			output = torch.squeeze(output, dim = 1)
-			# loss = self.loss_func(output, gd_maps)
-			loss = self.loss_func(output[:, 0, :], gd_maps[:, 0, :])
+			loss = self.loss_func(output, gd_maps)
 			
 			# now add the polynomial loss
 			# assume (batch_size, freq_bins, time_steps) -> (???, 361, 128)
@@ -332,9 +334,8 @@ class TONet(pl.LightningModule):
 				
 				loss += torch.mean(special_loss_temp)
 				# loss += 0.3*torch.mean(special_loss_temp_2)
-				
 			
-			
+
 			# verification necessary, shall try to avoid double count. 
 			self.log('loss', loss, on_step=True, on_epoch=True, prog_bar=False, logger=False)
 		elif self.mode == "all":
@@ -404,88 +405,7 @@ class TONet(pl.LightningModule):
 			name
 		]
 		
-		'''
-		device_type = next(self.parameters()).device
-		mini_batch = self.config.batch_size
-		mini_batch = 1
-		cfps = batch["cfp"][0]
-		tcfps = batch["tcfp"][0]
-		gds = batch["gd"][0]
-		lens = batch["length"][0]
-		name = batch["name"][0]
-
 		
-		if self.mode == "single":
-			output = []
-			for i in range(0, len(cfps), mini_batch):
-				temp_cfp = torch.from_numpy(cfps[i:i + mini_batch]).to(device_type)
-				temp_output = self(temp_cfp)
-				temp_output = torch.squeeze(temp_output, dim = 1)
-				temp_output = temp_output.detach().cpu().numpy()
-				output.append(temp_output)
-			output = np.concatenate(np.array(output),axis = 0)
-			return [
-				output, 
-				gds, 
-				lens,
-				name
-			]
-		elif self.mode == "all":
-			# output_tone = []
-			# output_octave = []
-			output = []
-			for i in range(0, len(cfps), mini_batch):
-				temp_cfp = torch.from_numpy(cfps[i:i + mini_batch]).to(device_type)
-				temp_tcfp = torch.from_numpy(tcfps[i:i + mini_batch]).to(device_type)
-				
-				# import sys
-				# print(name)
-				# print(temp_cfp.shape)
-				# sys.exit()
-				
-				
-				_, _, temp_output = self(temp_cfp, temp_tcfp)
-				temp_output = temp_output.detach().cpu().numpy()
-				output.append(temp_output)
-			output = np.concatenate(output,axis = 0)
-			return [
-
-				output,
-				gds, 
-				lens,
-				name
-			]
-		elif self.mode == "tcfp":
-			output = []
-			for i in range(0, len(cfps), mini_batch):
-				temp_cfp = torch.from_numpy(cfps[i:i + mini_batch]).to(device_type)
-				temp_tcfp = torch.from_numpy(tcfps[i:i + mini_batch]).to(device_type)
-				temp_output = self(temp_cfp, temp_tcfp)
-				temp_output = torch.squeeze(temp_output, dim = 1)
-				temp_output = temp_output.detach().cpu().numpy()
-				output.append(temp_output)
-			output = np.concatenate(np.array(output),axis = 0)
-			return [
-				output, 
-				gds, 
-				lens
-			]
-		elif self.mode == "spl" or self.mode == "spat":
-			# output_tone = []
-			# output_octave = []
-			output = []
-			for i in range(0, len(cfps), mini_batch):
-				temp_cfp = torch.from_numpy(cfps[i:i + mini_batch]).to(device_type)
-				_,_ , temp_output = self(temp_cfp)
-				temp_output = temp_output.detach().cpu().numpy()
-				output.append(temp_output)
-			output = np.concatenate(output,axis = 0)
-			return [
-				output,
-				gds, 
-				lens
-			]
-		'''
 	def validation_epoch_end(self, validation_step_outputs, test_flag = False):
 		for i, dataset_d in enumerate(validation_step_outputs):	
 			metric = np.array([0.,0.,0.,0.,0.,0.])  
@@ -514,69 +434,29 @@ class TONet(pl.LightningModule):
 				preds.append(pred)
 				gds.append(gd)
 				special_outputs.append(special_output)
-			
-			
 			preds = np.concatenate(preds, axis = 0)
 			gds = np.concatenate(gds, axis = 0)
 			special_outputs = np.concatenate(special_outputs, axis = 0)
 			
-			'''
-			# for detection only
-			preds[preds != 0] = 1
-			gds[gds != 0] = 1
-			'''
-			temp = np.loadtxt("model_backup/0_84.48420698924731_best.txt")
-			# temp = np.loadtxt("model_backup/1_89.19454225352112_best.txt")
-			# temp = np.loadtxt("model_backup/2_73.70216679030662_best.txt")
-			preds = temp[:, 0]
-			gds = temp[:, 1]
-			
-			from config import apply_median_filter
-			max_metric = 0
-			max_metric_size = -1
-			if apply_median_filter:
-				from util import median_filter
-				
-				for filter_size in range(3, 101):
-					preds_temp = median_filter(preds, filter_size = filter_size)
-					metric = melody_eval(preds_temp, gds)
-					# print(filter_size, metric[-1])
-					if metric[-1] > max_metric:
-						max_metric = metric[-1]
-						max_metric_size = filter_size
-						print(max_metric_size, metric)
-					# else:
-						# print("Not max", filter_size, metric)
-			
-				preds = median_filter(preds, filter_size = 5)
-			# import sys
-			# sys.exit()				
 			metric = melody_eval(preds, gds)
-			
-			
 			self.print("\n")
 			self.print("Dataset ", i, " OA:", metric[-1])
-
-			if metric[-1] > self.max_metric[i, -1]:
+			if test_flag or metric[-1] > self.max_metric[i, -1]:
+				
+				# write the result down
+				os.system("rm -rf model_backup/" + str(i) + "*_best.txt")
+				with open("model_backup/" + str(i) + "_" + str(metric[-1]) + "_best.txt", "a+") as f:
+					np.savetxt(f, np.c_[preds, gds])
+				
+				with open("model_backup/" + str(i) + "_vocal_prob.txt", "w") as f:
+					np.savetxt(f, special_outputs)	
+				
+				
 				for j in range(len(self.max_metric[i])):
 					self.max_metric[i,j] = metric[j]
 					self.max_metric[i,j] = metric[j]
-
-
 				if not test_flag:
-					# write the result down
-					from pathlib import Path
-					Path("model_backup/").mkdir(exist_ok=True)
-					
-					os.system("rm -rf model_backup/" + str(i) + "*_best.txt")
-					with open("model_backup/" + str(i) + "_" + str(metric[-1]) + "_best.txt", "a+") as f:
-						np.savetxt(f, np.c_[preds, gds])
-					
-					with open("model_backup/" + str(i) + "_vocal_prob.txt", "w") as f:
-						np.savetxt(f, special_outputs)	
-					
 					torch.save(self.state_dict(), "model_backup/bestk_" + str(i) + ".ckpt")
-					
 			self.print("Best ",i,":", self.max_metric[i])
 			
 			
